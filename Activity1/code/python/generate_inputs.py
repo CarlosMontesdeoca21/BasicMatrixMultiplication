@@ -17,9 +17,9 @@ def create_and_save_matrices(n):
     A = [[random.random() for _ in range(n)] for _ in range(n)]
     B = [[random.random() for _ in range(n)] for _ in range(n)]
     
-    with open(os.path.join(output_dir, f"A_{n}x{n}.csv"), "w", newline="") as f:
+    with open(os.path.join(output_dir, f"matrix_A_{n}.csv"), "w", newline="") as f:
         csv.writer(f).writerows(A)
-    with open(os.path.join(output_dir, f"B_{n}x{n}.csv"), "w", newline="") as f:
+    with open(os.path.join(output_dir, f"matrix_B_{n}.csv"), "w", newline="") as f:
         csv.writer(f).writerows(B)
 
 for size in [10, 100, 250]:

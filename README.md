@@ -15,7 +15,7 @@
 * **Python Version:** 3.12.10
 
 ## 2. Compilation Flags and Runtime Settings
-* **C:** Compiled with `gcc -O3 -Wall`.
+* **C:** Compiled with `gcc -O3 -Wall` (optimization -O3).
 * **Java:** Standard JVM settings. Warm-up runs are excluded from the final measurements.
 * **Python:** Standard interpreter.
 

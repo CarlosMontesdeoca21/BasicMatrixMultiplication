@@ -18,7 +18,7 @@ def main():
     path_c = os.path.join(data_dir, f'result_C_{n}.csv')
 
     if not os.path.exists(path_A) or not os.path.exists(path_B):
-        print("Error: No se encuentran las matrices de entrada. Ejecuta primero generate_inputs.py")
+        print("Error: Input matrices not found. Run generate_inputs.py first.")
         return
 
     A_list = load_matrix(path_A)

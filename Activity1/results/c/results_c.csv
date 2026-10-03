@@ -1,0 +1,16 @@
+size,language,numeric_type,repetition,time_seconds,memory
+10,C,double,1,0.000000,3764
+10,C,double,2,0.000000,3816
+10,C,double,3,0.000000,3816
+10,C,double,4,0.000000,3816
+10,C,double,5,0.000000,3816
+100,C,double,1,0.001000,4092
+100,C,double,2,0.001000,4096
+100,C,double,3,0.001000,4096
+100,C,double,4,0.001000,4096
+100,C,double,5,0.002000,4096
+250,C,double,1,0.010000,5480
+250,C,double,2,0.015000,5480
+250,C,double,3,0.013000,5480
+250,C,double,4,0.011000,5480
+250,C,double,5,0.012000,5480

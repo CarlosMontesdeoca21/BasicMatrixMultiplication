@@ -1,0 +1,16 @@
+size,language,numeric_type,repetition,time_seconds,memory
+10,Java,double,1,0.000051,679
+10,Java,double,2,0.000043,1068
+10,Java,double,3,0.000058,1068
+10,Java,double,4,0.000078,1068
+10,Java,double,5,0.000039,1068
+100,Java,double,1,0.003260,1309
+100,Java,double,2,0.003441,1309
+100,Java,double,3,0.004028,1309
+100,Java,double,4,0.003232,1309
+100,Java,double,5,0.003712,1309
+250,Java,double,1,0.014639,2549
+250,Java,double,2,0.014449,2549
+250,Java,double,3,0.014625,2549
+250,Java,double,4,0.013691,2549
+250,Java,double,5,0.014279,2549

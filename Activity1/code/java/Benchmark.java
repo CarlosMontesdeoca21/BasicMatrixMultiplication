@@ -8,7 +8,10 @@ import java.util.Locale;
 public class Benchmark {
 
     public static long getMemoryUsage() {
-        return 0;
+        Runtime runtime = Runtime.getRuntime();
+        runtime.gc();
+        long memoryUsedBytes = runtime.totalMemory() - runtime.freeMemory();
+        return memoryUsedBytes / 1024;
     }
 
     public static void multiplyMatrices(double[][] A, double[][] B, double[][] C, int n) {
@@ -87,6 +90,7 @@ public class Benchmark {
 
                     long endTime = System.nanoTime();
                     double elapsedTimeSec = (endTime - startTime) / 1_000_000_000.0;
+                    
                     long memoryKb = getMemoryUsage();
 
                     String rowData = String.format(Locale.US, "%d,Java,double,%d,%.6f,%d", n, rep, elapsedTimeSec, memoryKb);

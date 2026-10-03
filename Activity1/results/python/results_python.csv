@@ -1,0 +1,16 @@
+size,language,numeric_type,repetition,time_seconds,memory
+10,Python,double,1,0.000097,27136
+10,Python,double,2,0.000113,27140
+10,Python,double,3,0.000118,27140
+10,Python,double,4,0.000119,27140
+10,Python,double,5,0.000116,27140
+100,Python,double,1,0.098353,28364
+100,Python,double,2,0.088352,28364
+100,Python,double,3,0.089913,28364
+100,Python,double,4,0.098646,28368
+100,Python,double,5,0.109643,28368
+250,Python,double,1,1.513209,34340
+250,Python,double,2,1.548187,34340
+250,Python,double,3,1.647374,34340
+250,Python,double,4,3.236473,34340
+250,Python,double,5,3.766322,34340

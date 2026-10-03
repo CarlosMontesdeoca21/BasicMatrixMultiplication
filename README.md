@@ -29,23 +29,29 @@
 * **Execution limits:** The sequence will be stopped for a specific implementation if it reaches the declared maximum execution time or memory budget.
 
 The codebase is intentionally divided into two sets of files to separate the core logic from the testing infrastructure:
-* **Base Implementations (`matrix_mult.*`):** These files contain the pure, reference implementations of the `O(n^3)` algorithm. They serve as evidence of the initial assignment phase and can be used for single-run, standalone matrix multiplications without any experimental overhead.
+* **Base Implementations (`matrix_mult.*`):** These files contain the pure, reference implementations of the $O(n^3)$ algorithm. They serve as evidence of the initial assignment phase and can be used for single-run, standalone matrix multiplications without any experimental overhead.
 * **Benchmark Scripts (`benchmark.*`):** These files encapsulate the matrix multiplication logic alongside high-precision timers, warm-up iterations, and CSV data export. This encapsulation avoids import overheads and allows the compilers to fully optimize the benchmark loop, ensuring strict isolation for performance measurement.
 
 ## 5. Run Instructions
 
-### 5.1. Input Data Generation
+### 5.1 Dependencies
+To generate the graphs, we used the Matplotlib library.
+
+`pip install pandas matplotlib`.
+
+
+### 5.2. Input Data Generation
 To replicate the benchmarking experiment for matrix multiplication in C, Java, and Python reproducibly, follow the execution order detailed below.
 
 The first step is to execute the generator script `(python generate_inputs.py)` to create the test matrices for the entire sequence of sizes (`matrix_A_n.csv` and `matrix_B_n.csv`). These will be automatically stored in the project's data folder:
 
-### 5.2 Individual Benchmarks Execution
+### 5.3 Individual Benchmarks Execution
 Each language has its own script or program that performs warm-up rounds (2 rounds), executes 5 official consecutive repetitions, and exports the raw data to an individual CSV file.
 
 * **C Language:** 
     1. Compile the source code enabling optimization flags (-O3 and -Wall):
 
-        `gcc Activity1/code/c/benchmark.c -O3 -Wall -o Activity1/code/c/benchmark.exe`
+        `gcc Activity1/code/c/benchmark.c -O3 -Wall -o Activity1/code/c/benchmark.exe -lpsapi`
     2. Run the generated binary to produce results_c.csv:
 
         `./Activity1/code/c/benchmark.exe`
@@ -64,8 +70,18 @@ Each language has its own script or program that performs warm-up rounds (2 roun
 
         `python Activity1/code/python/benchmark.py`
 
-### 5.3 Results Consolidation
+### 5.4 Results Consolidation
 Once the three individual files are generated `(results_c.csv, results_java.csv, and results_python.csv)`, run the unifier script (`python merge_results.py`) to consolidate all measurements into a single master file. This step also outputs a preliminary statistical analysis (median, extreme values, and variability) needed for the final report
 
 * **The consolidated master file at:** `(Activity1/data/benchmark_results.csv)`
 * **A summary table in the console with the time and variability statistics ready for the final report documentation.**
+
+### 5.5 Data Visualization
+After generating the global benchmark CSV, run the plotting script to calculate the Interquartile Range (IQR) for variability and generate the performance charts:
+
+`python Activity1/code/python/plot_results.py`
+
+This script will output the IQR data in the console and generate two graphical plots in the data folder to explore the $O(n^3)$ behavior:
+
+* **Time vs Size graph:** `Activity1/data/plot_time_vs_size.png`
+* **Memory vs Size graph:** `Activity1/data/plot_memory_vs_size.png`

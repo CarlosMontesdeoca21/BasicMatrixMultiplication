@@ -2,9 +2,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <windows.h>
+#include <psapi.h>
 
-long get_memory_usage() {
-    return 0; 
+size_t get_memory_usage() {
+    PROCESS_MEMORY_COUNTERS pmc;
+    if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
+        return pmc.WorkingSetSize / 1024;
+    }
+    return 0;
 }
 
 void multiply_matrices(double** A, double** B, double** C, int n) {
@@ -108,12 +114,13 @@ int main() {
             clock_t end = clock();
 
             double elapsed_time = ((double)(end - start)) / CLOCKS_PER_SEC;
-            long memory_kb = get_memory_usage();
+            
+            size_t memory_kb = get_memory_usage();
 
-            fprintf(csv_file, "%d,C,double,%d,%.6f,%ld\n", n, rep, elapsed_time, memory_kb);
+            fprintf(csv_file, "%d,C,double,%d,%.6f,%zu\n", n, rep, elapsed_time, memory_kb);
             
             double checksum = compute_checksum(C, n);
-            printf("C | n=%d | Rep %d | Time: %.6f s | Memory: %ld KB | Checksum: %.4f\n", 
+            printf("C | n=%d | Rep %d | Time: %.6f s | Memory: %zu KB | Checksum: %.4f\n", 
                    n, rep, elapsed_time, memory_kb, checksum);
         }
 

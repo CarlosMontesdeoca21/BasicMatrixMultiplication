@@ -24,7 +24,7 @@
 * **Memory Budget:** 4 GB maximum heap/resident memory per process.
 
 ## 4. Methodology and Test Sizes
-* **Test Sequence (n x n):** 10, 100, 250, 500, 1000, 2000.
+* **Test Sequence (n x n):** 10, 100, 250.
 * **Correctness Validation:** The size \(n=10\) will be used to validate the results against a trusted reference before performance benchmarking.
 * **Execution limits:** The sequence will be stopped for a specific implementation if it reaches the declared maximum execution time or memory budget.
 

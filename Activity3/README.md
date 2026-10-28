@@ -48,6 +48,8 @@ Activity3/
 │       ├── validate_act3.py         # correctness checks (NumPy reference)
 │       ├── merge_results_act3.py    # median/IQR, speedup, efficiency, SIMD table
 │       └── plot_results_act3.py     # figures
+├── report/                          # LaTeX report (Overleaf)
+│   └── Assignment03_Montesdeoca_Report.tex
 ├── data/                            # generated inputs + raw measurements (not tracked)
 └── resultsAct3/                     # consolidated CSVs, figures, evidence (tracked)
 ```
@@ -185,6 +187,23 @@ Consolidated results (tracked, `resultsAct3/`):
   `plot_efficiency_vs_threads_act3.png`, `plot_seq_vs_omp_act3.png`,
   `plot_simd_act3.png`
 - `vectorization_evidence.txt`
+
+## Report (LaTeX / Overleaf)
+
+The research report lives in `report/Assignment03_Montesdeoca_Report.tex`
+(IEEEtran, two-column, pdfLaTeX). To compile it on Overleaf:
+
+1. Create a new Overleaf project and upload `Assignment03_Montesdeoca_Report.tex`.
+2. Create a folder named `figures/` inside the project and upload the five
+   PNGs from `resultsAct3/`:
+   `plot_time_vs_threads_act3.png`, `plot_speedup_vs_threads_act3.png`,
+   `plot_efficiency_vs_threads_act3.png`, `plot_seq_vs_omp_act3.png`,
+   `plot_simd_act3.png`.
+3. Set the compiler to **pdfLaTeX** and compile. The document expects the
+   figures either in `figures/` (Overleaf) or in `../resultsAct3/` (local
+   compilation from `report/`).
+
+The submission PDF should be named `Assignment03_Montesdeoca_Report.pdf`.
 
 ## Reused materials from previous activities
 

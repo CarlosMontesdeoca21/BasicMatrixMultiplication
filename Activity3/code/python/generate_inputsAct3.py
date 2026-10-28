@@ -22,7 +22,5 @@ if __name__ == "__main__":
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    # Sizes 10, 100 and 250 use the same seed and generation order as
-    # Activity1, so the input matrices are identical by construction.
     for size in [10, 100, 250, 500, 1000]:
         create_and_save_matrices(size, output_dir)

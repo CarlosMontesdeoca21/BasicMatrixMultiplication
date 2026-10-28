@@ -23,11 +23,6 @@ size_t get_memory_usage(void) {
     return 0;
 }
 
-/*
- * Monotonic high-resolution wall-clock timer.
- * omp_get_wtime() in libgomp on Windows only resolves ~1 ms, which is too
- * coarse for the smaller sizes, so we use QueryPerformanceCounter directly.
- */
 static double get_time(void) {
     static LARGE_INTEGER freq = {0};
     LARGE_INTEGER cnt;
@@ -38,7 +33,6 @@ static double get_time(void) {
     return (double)cnt.QuadPart / (double)freq.QuadPart;
 }
 
-/* Sequential baseline: classic i-j-k triple loop (same as Activity 1). */
 void multiply_seq(double** A, double** B, double** C, int n) {
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
@@ -50,12 +44,6 @@ void multiply_seq(double** A, double** B, double** C, int n) {
     }
 }
 
-/*
- * Sequential i-k-j variant (optional SIMD study only).
- * Same arithmetic work O(n^3) and same storage, but the innermost loop
- * updates a full row of C with a rank-1 update, which gcc can auto-vectorize
- * without needing -ffast-math (unlike the FP reduction in i-j-k).
- */
 void multiply_seq_ikj(double** A, double** B, double**C, int n) {
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
@@ -72,11 +60,6 @@ void multiply_seq_ikj(double** A, double** B, double**C, int n) {
     }
 }
 
-/*
- * Parallel version: identical i-j-k kernel, parallelized over the outer
- * loop (rows). Each row of C is written by exactly one thread, so there
- * are no races and no synchronization is needed.
- */
 void multiply_omp(double** A, double** B, double** C, int n, int threads) {
     #pragma omp parallel for num_threads(threads) schedule(static)
     for (int i = 0; i < n; i++) {
@@ -170,11 +153,6 @@ int parse_int_list(const char* s, int* out, int max) {
     return count;
 }
 
-/*
- * Default data directory and output file are resolved relative to the
- * executable location (Activity3/code/c/ -> Activity3/data), so the program
- * works regardless of the current working directory.
- */
 static char g_default_datadir[1024];
 static char g_default_output[1024];
 
@@ -187,11 +165,11 @@ static void resolve_default_paths(void) {
         return;
     }
     char* last_slash = strrchr(exe_path, '\\');
-    if (last_slash) *last_slash = '\0';               /* ...\Activity3\code\c */
+    if (last_slash) *last_slash = '\0';               
     last_slash = strrchr(exe_path, '\\');
-    if (last_slash) *last_slash = '\0';               /* ...\Activity3\code   */
+    if (last_slash) *last_slash = '\0';               
     last_slash = strrchr(exe_path, '\\');
-    if (last_slash) *last_slash = '\0';               /* ...\Activity3        */
+    if (last_slash) *last_slash = '\0';               
     snprintf(g_default_datadir, sizeof(g_default_datadir), "%s\\data", exe_path);
     snprintf(g_default_output, sizeof(g_default_output), "%s\\data\\results_omp_act3.csv", exe_path);
 }
@@ -258,7 +236,7 @@ int main(int argc, char** argv) {
            omp_get_num_procs(), omp_get_max_threads());
     printf("Warm-ups: %d | Measured repetitions: %d\n\n", warm_ups, repetitions);
 
-    /* ---- Validation mode: dump the sequential result of size N to CSV ---- */
+    
     if (validate_n > 0) {
         char path_A[2048], path_B[2048], path_out[2048];
         snprintf(path_A, sizeof(path_A), "%s/matrix_A_%d.csv", datadir, validate_n);
@@ -294,7 +272,7 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    /* ------------------------------ Benchmark sweep ------------------------------ */
+    
     FILE* csv_file = fopen(output, "w");
     if (!csv_file) {
         perror("Error creating the results file");
@@ -322,7 +300,7 @@ int main(int argc, char** argv) {
             continue;
         }
 
-        /* Reference checksum from one untimed sequential run. */
+        
         multiply_seq(A, B, C, n);
         double ref_checksum = compute_checksum(C, n);
 

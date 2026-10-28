@@ -191,7 +191,8 @@ Consolidated results (tracked, `resultsAct3/`):
 ## Report (LaTeX / Overleaf)
 
 The research report lives in `report/Assignment03_Montesdeoca_Report.tex`
-(IEEEtran, two-column, pdfLaTeX). To compile it on Overleaf:
+(`article` class, single-column, numbered sections, pdfLaTeX). To compile it
+on Overleaf:
 
 1. Create a new Overleaf project and upload `Assignment03_Montesdeoca_Report.tex`.
 2. Create a folder named `figures/` inside the project and upload the five

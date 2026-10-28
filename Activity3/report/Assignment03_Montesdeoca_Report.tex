@@ -1,4 +1,4 @@
-\documentclass[conference]{IEEEtran}
+\documentclass[12pt,a4paper]{article}
 
 \usepackage{graphicx}
 \usepackage{booktabs}
@@ -9,447 +9,360 @@
 
 \begin{document}
 
-\title{How Many Threads? Shared-Memory Parallelism and SIMD Vectorization
-in Dense Matrix Multiplication}
-
-\author{
-\IEEEauthorblockN{Carlos Montesdeoca}
-\IEEEauthorblockA{Big Data Course --- University of Las Palmas de Gran Canaria\\
-Academic Year 2026--2027\\
-Assignment 3: Parallel Matrix Multiplication}
-}
+\title{Parallel Matrix Multiplication using OpenMP and SIMD Vectorization}
+\author{Carlos Montesdeoca\\
+Big Data Course --- University of Las Palmas de Gran Canaria}
+\date{}
 
 \maketitle
-
-\begin{abstract}
-This study investigates how the number of threads affects the performance of a
-dense $n \times n$ matrix multiplication in shared memory, and when parallel
-execution is beneficial. A sequential $O(n^3)$ baseline (classic i-j-k triple
-loop in C with \texttt{double} precision) is compared against an OpenMP
-parallelization of the same kernel over matrix rows, using thread counts
-$p \in \{1, 2, 4, 8, 16, 22, 28\}$ on a hybrid 16-core/22-thread Intel Core
-Ultra 7 155H. Inputs are deterministic shared matrices up to $n = 1000$; each
-configuration is measured 5 times after 2 warm-ups with a monotonic
-microsecond-resolution timer, reporting medians and interquartile ranges. For
-$n = 1000$, speedup grows sub-linearly and saturates at $S(p) \approx 5.45$ for
-$p \geq 16$, with efficiency dropping from $1.04$ ($p=2$) to $0.25$ ($p=22$);
-oversubscription ($p=28$) yields no further gain. The framework overhead of
-running OpenMP with a single thread is small ($\approx 1.4\%$). As an optional
-extension, a sequential i-k-j variant is evaluated under three compiler
-configurations: reordering the loops alone makes the kernel vectorizable and
-reduces the $n=1000$ time from $858$ ms to $288$ ms, auto-vectorization with
-\texttt{-O3} reduces it further to $186$ ms, and \texttt{-march=native} reaches
-$157$ ms --- comparable to the 16-thread unvectorized parallel run. Conclusions
-are limited to the tested hardware, inputs and configurations.
-\end{abstract}
-
-\begin{IEEEkeywords}
-matrix multiplication, OpenMP, shared-memory parallelism, speedup, SIMD
-vectorization, performance evaluation
-\end{IEEEkeywords}
 
 \section{Introduction}
 \label{sec:intro}
 
-Dense matrix multiplication is the canonical workload of scientific computing
-and a standard vehicle for teaching performance engineering: its $O(n^3)$
-arithmetic cost and $O(n^2)$ storage make both thread-level parallelism and
-data-level vectorization directly observable. Modern consumer CPUs no longer
-offer homogeneous cores; they combine performance (P) and efficiency (E)
-cores, hardware threads, and wide SIMD units, so the classical question
-``how many threads should I use?'' no longer has a simple answer.
+Matrix multiplication is a fundamental operation in many scientific and
+industrial applications such as machine learning, data processing, and
+simulations. However, its computational cost grows as $O(n^3)$ for matrices of
+size $n \times n$~\cite{golub2013}. The goal of this project is to evaluate
+the performance improvement obtained through parallelism in shared memory,
+and to answer a practical question: how does the thread count affect the
+execution time, and where does the speedup saturate? As an optional
+extension, we also measure how much performance the compiler can extract from
+the same algorithm through SIMD vectorization.
 
-The motivating question of this assignment is: \textbf{how does the thread
-count $p$ affect the execution time of an OpenMP parallelization of a basic
-dense matrix multiplication, compared with an equivalent sequential baseline,
-and where does the speedup saturate?} We additionally ask whether the
-framework overhead is visible at $p=1$, whether oversubscribing the hardware
-is harmful, and (as an optional extension) how much performance is available
-from compiler auto-vectorization when the loop order is chosen to expose it.
-
-The hypotheses registered before the measurements were:
+We implement and compare three approaches:
 \begin{itemize}
-\item \textbf{H1:} Speedup will be sub-linear and will saturate well below the
-22 hardware threads, because the machine is heterogeneous (only 6 P-cores) and
-the kernel becomes memory-bandwidth bound at high $p$.
-\item \textbf{H2:} The OpenMP runtime overhead at $p=1$ will be small
-(single-digit percent) but measurable, since the parallel region adds fork and
-join costs to an otherwise identical kernel.
-\item \textbf{H3:} A vectorizable loop order (i-k-j) will provide a larger
-single-core gain than adding threads beyond saturation, and the two techniques
-are complementary.
+\item Sequential algorithm (classic i-j-k triple loop in C, \texttt{double}
+precision);
+\item Parallel execution using OpenMP~\cite{dagum1998,openmp52} (the same
+i-j-k kernel, parallelized over the rows of the result matrix);
+\item Sequential i-k-j variant (same arithmetic work and storage, only the
+loop order changes, so the innermost loop becomes a vectorizable rank-1
+row update).
 \end{itemize}
-
-Section~\ref{sec:bg} reviews the background; Section~\ref{sec:method}
-documents the methodology; Sections~\ref{sec:results} and
-\ref{sec:discussion} present and discuss the results; and
-Section~\ref{sec:concl} concludes.
-
-\section{Background}
-\label{sec:bg}
-
-\subsection{Dense matrix multiplication and loop order}
-Given $\mathbf{C} = \mathbf{A}\mathbf{B}$ with square $n \times n$ matrices, the
-direct algorithm computes each element as an inner product of a row of
-$\mathbf{A}$ and a column of $\mathbf{B}$, requiring $2n^3$ floating-point
-operations~\cite{golub2013}. The classic i-j-k triple loop accumulates the
-innermost product into a single element $C_{ij}$, which is favorable for
-register reuse but performs a floating-point reduction in the innermost loop.
-In the i-k-j order, the innermost loop performs the rank-1 update
-$C_{i,:} \mathrel{+}= A_{ik}\,\mathbf{B}_{k,:}$, i.e.\ a full row of $\mathbf{C}$
-is updated with one scalar times a contiguous row of $\mathbf{B}$. Both orders
-perform the same arithmetic work and use the same storage, but i-k-j exposes
-data-level parallelism that a compiler can vectorize without reassociating a
-reduction~\cite{hager2011}.
-
-\subsection{OpenMP, speedup and efficiency}
-OpenMP is the de-facto standard shared-memory API for C/C++/Fortran; programs
-annotate loops with \texttt{\#pragma omp parallel for}, and the runtime
-creates a team of $p$ threads that share memory and execute the loop body in
-parallel~\cite{dagum1998,openmp52}. Given the sequential time
-$T_{\text{seq}}(n)$ and the parallel time $T_p(n)$ for the same input, the
-speedup and efficiency are defined as
-\begin{equation}
-S(p) = \frac{T_{\text{seq}}(n)}{T_p(n)}, \qquad
-E(p) = \frac{S(p)}{p} \in [0, 1].
-\end{equation}
-Amdahl's law bounds $S(p)$ by the inverse of the serial fraction $f$,
-$S(p) \leq 1/(f + (1-f)/p)$~\cite{amdahl1967}; in practice, synchronization,
-load imbalance and memory bandwidth further reduce the attainable speedup,
-which can be visualized with the roofline model~\cite{williams2009}.
-
-\subsection{Auto-vectorization and hybrid CPUs}
-Compilers such as GCC vectorize innermost loops at \texttt{-O3} when the loop
-dependencies permit it; the report \texttt{-fopt-info-vec-optimized} provides
-direct evidence of which loops were vectorized~\cite{gccopt}. Floating-point
-reductions are not reassociated without \texttt{-ffast-math}, so the i-j-k
-innermost loop cannot be vectorized under strict semantics, while the i-k-j
-rank-1 update can. The test machine is an Intel Core Ultra 7 155H (Meteor
-Lake): 6 P-cores (2 threads each), 8 E-cores and 2 low-power E-cores, 22
-hardware threads in total, with P-cores boosting to 4.8~GHz and E-cores to
-3.8~GHz~\cite{intel155h}. Thread placement across heterogeneous cores is
-therefore a first-order effect on any scaling curve.
 
 \section{Methodology}
 \label{sec:method}
 
-\subsection{Implementations}
-All kernels are written in C, use \texttt{double} precision and store matrices
-as arrays of row pointers (\texttt{double**}); they share the CSV loader,
-checksum validation and memory metric of the validated Activity~1 baseline.
-Table~\ref{tab:impl} summarizes the three kernels.
+Random square matrices of sizes 250, 500, and 1000 were generated using
+double-precision floating-point values (a deterministic generator with seed
+42; the smaller sizes 10 and 100 were used only for validation). Each
+implementation multiplies matrices using the same algorithm, except with
+different parallelization strategies, and the same pair of input matrices
+$(\mathbf{A}, \mathbf{B})$ is used for every method and thread count of a
+given size.
 
-\begin{table}[t]
-\caption{Implementations under test}
-\label{tab:impl}
-\centering
-\begin{tabular}{@{}ll@{}}
-\toprule
-Method & Description \\
-\midrule
-Sequential & i-j-k triple loop (baseline) \\
-OpenMP & same i-j-k kernel, \texttt{parallel for} over rows \\
-Sequential\_ikj & i-k-j order (SIMD study only) \\
-\bottomrule
-\end{tabular}
-\end{table}
+Execution time was measured using \texttt{QueryPerformanceCounter}~\cite{msqpc}
+and converted to milliseconds. This API was chosen over
+\texttt{omp\_get\_wtime()}, which in libgomp on Windows~\cite{libgomp} only
+resolves about 1 ms and would quantize the smaller sizes. Each configuration was measured with 2 warm-up runs (excluded
+from the samples) followed by 5 measured repetitions; the reported statistic
+is the median of the 5 samples. Only the multiplication kernel is timed;
+matrix loading and allocation are outside the timed region.
 
-The OpenMP kernel distributes the outer loop (rows of $\mathbf{C}$) with
-\texttt{num\_threads($p$)} and \texttt{schedule(static)}. Each row of
-$\mathbf{C}$ is written by exactly one thread, so the parallelization is
-inherently race-free and requires no synchronization inside the kernel.
-The Sequential\_ikj kernel keeps identical arithmetic and storage; only the
-loop order changes, and it is used exclusively for the vectorization study
-(single thread, compiler flag sweep).
+Correctness was verified before benchmarking: the checksum of the result
+matrix is compared against the sequential reference after every parallel
+configuration (relative tolerance $10^{-6}$), and the sequential result for
+$n=10$ matches NumPy's \texttt{A @ B} with a maximum absolute difference of
+$4.9 \times 10^{-7}$. All validations passed.
 
-\subsection{Inputs and environment}
-Inputs are dense matrices with entries drawn from $U[0,1)$ by a deterministic
-generator (\texttt{random.seed(42)}); the matrices for $n \in \{10, 100, 250\}$
-are identical by construction to those of Activity~1, and $n \in \{500, 1000\}$
-extend the same sequence. The same pair $(\mathbf{A}, \mathbf{B})$ is used for
-every method and thread count of a given $n$. Table~\ref{tab:env} lists the
-execution environment; the declared budgets were 5 minutes and 4 GB per
-multiplication, never reached (largest observed time: 1.19 s).
+All experiments were executed on a machine with:
+\begin{itemize}
+\item CPU: Intel Core Ultra 7 155H (Meteor Lake) --- 6 P-cores + 8 E-cores +
+2 low-power E-cores = 16 physical cores / 22 hardware threads, P-cores up to
+4.8 GHz;
+\item RAM: 32 GB;
+\item OS: Windows 11;
+\item Compiler: gcc 16.2.0 (MSYS2), \texttt{-O3 -fopenmp}.
+\end{itemize}
 
-\begin{table}[t]
-\caption{Execution environment}
-\label{tab:env}
-\centering
-\begin{tabular}{@{}ll@{}}
-\toprule
-CPU & Intel Core Ultra 7 155H (Meteor Lake) \\
-Cores/threads & 6P + 8E + 2LPE = 16 cores / 22 threads \\
-RAM & 32 GB, LPDDR5 \\
-OS & Windows 11 (64-bit) \\
-Compiler & gcc 16.2.0 (MSYS2), \texttt{-O3 -fopenmp} \\
-Timer & \texttt{QueryPerformanceCounter} ($\approx$100 ns) \\
-Thread counts & $p \in \{1, 2, 4, 8, 16, 22, 28\}$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\texttt{omp\_get\_wtime()} was initially used but rejected: in libgomp on
-Windows it resolves only $\approx$1~ms, which quantizes the smaller sizes; the
-Windows \texttt{QueryPerformanceCounter} API~\cite{msqpc} provides the needed
-resolution and is monotonic.
-
-\subsection{Measurement protocol}
-Following the common protocol of the course: 2 warm-up runs are excluded from
-the samples, followed by 5 measured repetitions per configuration. Only the
-multiplication kernel is timed; matrix loading, allocation and checksum
-computation are outside the timed region. From the 5 raw samples we report the
-\emph{median} as the central statistic and the \emph{interquartile range}
-(IQR) as variability. All 255 raw measurements are retained in CSV files
-(columns \texttt{size, method, threads, build, repetition, time\_seconds,
-memory}).
-
-\subsection{Correctness verification}
-Two independent checks were run before benchmarking: (i) the sequential result
-for $n=10$ matches NumPy's \texttt{A @ B} with maximum absolute difference
-$4.9 \times 10^{-7}$ (tolerance $10^{-6}$); (ii) after every OpenMP
-configuration, the checksum of $\mathbf{C}$ is compared against the sequential
-reference (relative tolerance $10^{-6}$), and the elementwise difference
-between sequential and parallel results is exactly zero, because both kernels
-perform the same operation in the same order for every element. All 40
-in-run validations passed.
-
-\subsection{Setup limitations}
-Explicit thread affinity could not be enforced: libgomp~\cite{libgomp} ignores
-\texttt{OMP\_PROC\_BIND}/\texttt{OMP\_PLACES} on Windows with the message
-``Affinity not supported on this configuration'', so the OS scheduler placed
-the workers. The memory metric is the process working set (via
-\texttt{GetProcessMemoryInfo}), which includes input matrices and runtime
-overhead, and is therefore used only as a coarse indicator.
+The thread counts tested were $p \in \{1, 2, 4, 8, 16, 22, 28\}$: $p = 22$
+matches the number of hardware contexts and $p = 28$ deliberately
+oversubscribes the machine. Explicit thread affinity
+(\texttt{OMP\_PROC\_BIND}/\texttt{OMP\_PLACES}) could not be enforced, because
+libgomp ignores it on Windows; the OS scheduler placed the workers.
 
 \section{Results}
 \label{sec:results}
 
-\subsection{Thread scaling}
-Table~\ref{tab:n1000} reports the full thread sweep for the largest tested
-size, $n = 1000$ (medians of 5 repetitions; IQR in parentheses). OpenMP at
-$p=1$ is 1.4\% faster than the plain sequential baseline --- the measured
-framework overhead is negligible at this granularity. Speedup grows
-sub-linearly: $S(4) = 3.59$, $S(8) = 4.83$, and saturates at $S(22) = 5.45$
-with $E(22) = 0.25$. Oversubscription ($p = 28 > 22$ hardware threads) does
-not degrade the median much ($S = 5.41$) but efficiency halves to $0.19$.
+Table~\ref{tab:main} summarizes the execution times and speedup values
+obtained for the three largest sizes, comparing the sequential baseline with
+the OpenMP version at 8 threads (practical sweet spot) and 16 threads
+(saturation point). Figure~\ref{fig:time-size} shows the same data
+graphically (log scale).
 
-\begin{table}[t]
-\caption{Thread sweep for $n = 1000$ (median time, IQR, speedup, efficiency,
-median working set)}
-\label{tab:n1000}
+\begin{table}[h]
 \centering
-\begin{tabular}{@{}cccccc@{}}
+\caption{Execution times (median of 5 runs) and speedup for different matrix
+sizes.}
+\label{tab:main}
+\begin{tabular}{@{}lccccc@{}}
 \toprule
-Config & $T_p$ (ms) & IQR (ms) & $S(p)$ & $E(p)$ & Mem (KB) \\
+Size & Sequential (ms) & OpenMP $p=8$ (ms) & OpenMP $p=16$ (ms) & Speedup 8 & Speedup 16 \\
 \midrule
-Sequential & 858.2 & 31.9 & --- & --- & 31304 \\
-OpenMP $p=1$ & 846.6 & 7.7 & 1.01 & 1.01 & 31304 \\
-OpenMP $p=2$ & 414.4 & 8.7 & 2.07 & 1.04 & 30888 \\
-OpenMP $p=4$ & 239.2 & 16.9 & 3.59 & 0.90 & 30920 \\
-OpenMP $p=8$ & 177.5 & 5.4 & 4.83 & 0.60 & 30980 \\
-OpenMP $p=16$ & 157.7 & 3.3 & 5.44 & 0.34 & 31108 \\
-OpenMP $p=22$ & 157.4 & 5.3 & 5.45 & 0.25 & 31208 \\
-OpenMP $p=28$ & 158.5 & 1.9 & 5.41 & 0.19 & 31316 \\
+250 & 7.06 & 2.62 & 1.76 & 2.69 & 4.01 \\
+500 & 92.90 & 19.64 & 16.31 & 4.73 & 5.70 \\
+1000 & 858.18 & 177.52 & 157.66 & 4.83 & 5.44 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Variability is small for the parallel configurations (IQR below 2\% of the
-median for $n = 1000$), and the memory footprint is essentially constant
-($\approx$30.5 MB, i.e.\ the three $1000 \times 1000$ double matrices
-$\approx$24 MB plus runtime), growing slightly with $p$ due to per-thread
-stacks. This confirms that the experiment is compute/bandwidth bound rather
-than memory-capacity bound.
-
-\begin{figure}[t]
+\begin{figure}[h]
 \centering
-\includegraphics[width=\columnwidth]{plot_time_vs_threads_act3.png}
-\caption{Median OpenMP execution time vs.\ thread count (log-log), with IQR
-error bars. The dotted line marks the 22 hardware contexts. Time drops steeply
-up to $p \approx 8$ and flattens afterwards; the smallest sizes are dominated
-by thread management overhead and increase with $p$.}
-\label{fig:time}
+\includegraphics[width=0.9\textwidth]{plot_seq_vs_omp_act3.png}
+\caption{Execution time (ms, log scale) vs.\ matrix size: sequential
+baseline, OpenMP with $p=1$ (framework overhead) and OpenMP with $p=16$.}
+\label{fig:time-size}
 \end{figure}
 
-\begin{figure}[t]
+\subsection{Execution Time Analysis}
+\label{sec:time}
+
+Figure~\ref{fig:time-threads} shows the median execution time as a function
+of the thread count for every tested size. For $n = 1000$, the time drops
+from 858 ms (sequential) to 178 ms at $p = 8$ and to about 157 ms at
+$p = 16$, after which the curve is essentially flat. Small problems
+($n \leq 100$) are dominated by thread management: their time actually
+\emph{increases} with $p$, because the computation is shorter than the cost of
+creating and joining the thread team.
+
+\begin{figure}[h]
 \centering
-\includegraphics[width=\columnwidth]{plot_speedup_vs_threads_act3.png}
-\caption{Speedup $S(p) = T_{\text{seq}}/T_p$ (median times) vs.\ thread count
-for $n \in \{250, 500, 1000\}$, against the ideal line $S(p) = p$. All curves
-bend away from the ideal early and saturate around $p = 16$--$22$.}
+\includegraphics[width=0.9\textwidth]{plot_time_vs_threads_act3.png}
+\caption{Median execution time vs.\ thread count (log-log) for
+$n \in \{250, 500, 1000\}$, with IQR error bars. The dotted line marks the 22
+hardware contexts.}
+\label{fig:time-threads}
+\end{figure}
+
+\subsection{Speedup Analysis}
+\label{sec:speedup}
+
+Table~\ref{tab:sweep} details the full thread sweep for the largest size
+($n = 1000$). Speedup grows sub-linearly: $S(4) = 3.59$, $S(8) = 4.83$, and
+saturates at $S(22) = 5.45$. Oversubscription ($p = 28 > 22$ hardware
+threads) gives no further benefit ($S = 5.41$). Note that OpenMP with a
+single thread is within 1.4\% of the plain sequential baseline, so the
+framework overhead is negligible at this granularity.
+
+\begin{table}[h]
+\centering
+\caption{Thread sweep for $n = 1000$: median time, speedup and efficiency.}
+\label{tab:sweep}
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+Config & $T_p$ (ms) & $S(p)$ & $E(p)$ \\
+\midrule
+Sequential & 858.2 & --- & --- \\
+OpenMP $p=1$ & 846.6 & 1.01 & 1.01 \\
+OpenMP $p=2$ & 414.4 & 2.07 & 1.04 \\
+OpenMP $p=4$ & 239.2 & 3.59 & 0.90 \\
+OpenMP $p=8$ & 177.5 & 4.83 & 0.60 \\
+OpenMP $p=16$ & 157.7 & 5.44 & 0.34 \\
+OpenMP $p=22$ & 157.4 & 5.45 & 0.25 \\
+OpenMP $p=28$ & 158.5 & 5.41 & 0.19 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Figure~\ref{fig:speedup} plots the speedup of the three largest sizes against
+the ideal line $S(p) = p$. Larger problems scale better (more computation per
+unit of thread management), and $n = 500$ slightly outperforms $n = 1000$ at
+high thread counts, which is consistent with memory-bandwidth sharing.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.9\textwidth]{plot_speedup_vs_threads_act3.png}
+\caption{Speedup $S(p) = T_{\text{seq}}/T_p$ (median times) vs.\ thread
+count for $n \in \{250, 500, 1000\}$, against the ideal line $S(p) = p$.}
 \label{fig:speedup}
 \end{figure}
 
-\begin{figure}[t]
+\subsection{Parallel Efficiency}
+\label{sec:efficiency}
+
+Figure~\ref{fig:efficiency} shows the parallel efficiency
+$E(p) = S(p)/p$. Efficiency stays close to 1 up to $p = 2$--$4$ and decays
+as the speedup saturates: at the maximum observed speedup
+($p = 22$, $n = 1000$) only about a quarter of the theoretical parallel
+capacity is used, and at $p = 28$ it falls below 20\%.
+
+\begin{figure}[h]
 \centering
-\includegraphics[width=\columnwidth]{plot_efficiency_vs_threads_act3.png}
-\caption{Parallel efficiency $E(p) = S(p)/p$. Efficiency stays near 1 up to
-$p = 2$--$4$ and decays roughly as $S(p)$ saturates; $p = 28$
-(oversubscription) is the worst point in relative terms.}
-\label{fig:eff}
+\includegraphics[width=0.9\textwidth]{plot_efficiency_vs_threads_act3.png}
+\caption{Parallel execution efficiency relative to the number of threads.}
+\label{fig:efficiency}
 \end{figure}
 
-Figure~\ref{fig:time} shows the median time curves, and
-Figs.~\ref{fig:speedup}--\ref{fig:eff} the speedup and efficiency for the three
-larger sizes. The $n = 250$ curve is noisy at 1--10 ms granularity (its IQR is
-a sizeable fraction of the median), so quantitative conclusions are drawn from
-$n \in \{500, 1000\}$. Table~\ref{tab:cross} consolidates the speedups: larger
-problems scale better (more work per unit of communication), and $n = 500$
-slightly outperforms $n = 1000$ at high $p$, consistent with bandwidth sharing
-across more concurrent rows.
+\subsection{Speedup and Efficiency Definitions}
+\label{sec:definitions}
 
-\begin{table}[t]
-\caption{Speedup $S(p)$ by problem size (median times)}
-\label{tab:cross}
-\centering
-\begin{tabular}{@{}ccccccc@{}}
-\toprule
-$n$ & $p=2$ & $p=4$ & $p=8$ & $p=16$ & $p=22$ & $p=28$ \\
-\midrule
-250 & 2.10 & 2.73 & 2.69 & 4.01 & 4.23 & 4.52 \\
-500 & 2.14 & 3.53 & 4.73 & 5.70 & 5.77 & 5.73 \\
-1000 & 2.07 & 3.59 & 4.83 & 5.44 & 5.45 & 5.41 \\
-\bottomrule
-\end{tabular}
-\end{table}
+The performance metrics used are:
+\begin{equation}
+S = \frac{T_{\text{sequential}}}{T_{\text{parallel}}}, \qquad
+E = \frac{S}{p},
+\end{equation}
+where $S$ is the speedup, $E$ is the efficiency, and $p$ is the number of
+threads. All values in Tables~\ref{tab:main}--\ref{tab:sweep} and in
+Figs.~\ref{fig:speedup}--\ref{fig:efficiency} are computed from median
+times.
 
-\begin{figure}[t]
-\centering
-\includegraphics[width=\columnwidth]{plot_seq_vs_omp_act3.png}
-\caption{Median time comparison at $n \in \{250, 500, 1000\}$: sequential
-baseline, OpenMP with $p=1$ (framework overhead) and OpenMP with $p=16$
-(log scale).}
-\label{fig:bar}
-\end{figure}
+\subsection{SIMD Vectorization Study}
+\label{sec:simd}
 
-\subsection{SIMD vectorization extension}
-The optional extension evaluates the Sequential\_ikj kernel under three
+The optional extension evaluates the sequential i-k-j kernel under three
 compiler configurations, all single-threaded, plus the i-j-k \texttt{-O3}
-baseline (Table~\ref{tab:simd}). Disabling vectorization
-(\texttt{-fno-tree-vectorize}) isolates the effect of the loop reorder alone:
-it yields $2.98 \times$ over the i-j-k baseline at $n=1000$ purely from better
-data locality. Auto-vectorization (\texttt{-O3}) then contributes a further
-$1.55 \times$, and \texttt{-march=native} (AVX-512-capable Meteor Lake vector
-units) another $1.19 \times$, for a total of $5.47 \times$ over the baseline
-kernel.
+baseline (Table~\ref{tab:simd}, Fig.~\ref{fig:simd}). Disabling
+vectorization (\texttt{-fno-tree-vectorize}) isolates the effect of the loop
+reorder alone: it is $2.98 \times$ faster than the i-j-k baseline at
+$n = 1000$, purely from better data locality. Auto-vectorization
+(\texttt{-O3}) then contributes a further $1.55 \times$, and
+\texttt{-march=native} another $1.19 \times$, for a total of $5.47 \times$
+over the baseline kernel. The compiler report
+(\texttt{-fopt-info-vec-optimized}) confirms that the i-k-j innermost loop is
+vectorized while the i-j-k innermost loop (a floating-point reduction) is
+not, exactly as predicted by dependency analysis~\cite{hager2011}. The
+compiler flag documentation is available in the GCC manual~\cite{gccopt}.
 
-\begin{table}[t]
-\caption{SIMD study: median time (ms) of the sequential kernels, and speedup
-relative to i-k-j without vectorization (last column)}
-\label{tab:simd}
+\begin{table}[h]
 \centering
-\begin{tabular}{@{}lcccc@{}}
+\caption{SIMD study: median time (ms) of the sequential kernels.}
+\label{tab:simd}
+\begin{tabular}{@{}lccc@{}}
 \toprule
-Build & $n=250$ & $n=500$ & $n=1000$ & vs.\ no-vec \\
+Build & $n=250$ & $n=500$ & $n=1000$ \\
 \midrule
-i-j-k, \texttt{-O3} & 7.06 & 92.90 & 858.18 & --- \\
-i-k-j, \texttt{-O3 -fno-tree-vectorize} & 4.13 & 32.92 & 288.28 & $1.00\times$ \\
-i-k-j, \texttt{-O3} & 2.56 & 19.81 & 186.16 & $1.55\times$ \\
-i-k-j, \texttt{-O3 -march=native} & 1.80 & 14.58 & 156.85 & $1.84\times$ \\
+i-j-k, \texttt{-O3} & 7.06 & 92.90 & 858.18 \\
+i-k-j, \texttt{-O3 -fno-tree-vectorize} & 4.13 & 32.92 & 288.28 \\
+i-k-j, \texttt{-O3} & 2.56 & 19.81 & 186.16 \\
+i-k-j, \texttt{-O3 -march=native} & 1.80 & 14.58 & 156.85 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\begin{figure}[t]
+\begin{figure}[h]
 \centering
-\includegraphics[width=\columnwidth]{plot_simd_act3.png}
+\includegraphics[width=0.9\textwidth]{plot_simd_act3.png}
 \caption{SIMD study: median time (log scale) of the i-k-j kernel under three
-compiler configurations, compared with the i-j-k \texttt{-O3} baseline, for
-$n \in \{250, 500, 1000\}$.}
+compiler configurations, compared with the i-j-k \texttt{-O3} baseline.}
 \label{fig:simd}
 \end{figure}
-
-Figure~\ref{fig:simd} visualizes the gap. The compiler report
-(\texttt{-fopt-info-vec-optimized}) confirms that the i-k-j innermost loop is
-vectorized with 16-byte vectors at \texttt{-O3}, while no vectorized loop is
-reported for the i-j-k kernel, exactly as predicted by the reduction analysis.
 
 \section{Discussion}
 \label{sec:discussion}
 
-\textbf{Answer to the research question.} On this machine and for these
-inputs, threads help up to $p \approx 8$ and stop helping beyond $p \approx
-16$: for $n=1000$, 8 threads deliver $S = 4.83$ ($E = 0.60$) and 22 threads
-deliver only $S = 5.45$ ($E = 0.25$). The practical sweet spot is
-$p \in \{8, 16\}$, where efficiency and absolute time are both reasonable.
+For matrix size $250 \times 250$, the parallel version only marginally
+outperforms the sequential one at low thread counts, and its speedup curve is
+noisy: the runtime is only a few milliseconds, so thread-management costs and
+measurement quantization are a sizeable fraction of the total. For larger
+matrices, the parallel version significantly outperforms the sequential
+baseline, exactly as expected from an $O(n^3)$ workload.
 
-\textbf{Why the saturation at $\approx 5.5\times$?} Three mutually compatible
-explanations are supported by our data. First, the machine is heterogeneous:
-only 6 P-cores exist, so a team of 16--22 threads necessarily includes slower
-E-core workers, and row-partitioned work executed on an E-core inflates
-$T_p$~\cite{intel155h}. Second, Amdahl's-law fitting of the observed speedups
-yields an effective serial-plus-overhead fraction of $f \approx 9\%$ at $p=8$
-and $f \approx 15\%$ at $p=22$: the ``serial part'' is not literal code (the
-kernel has no serial section), but synchronization, scheduling and bandwidth
-contention behave like one. Third, the working set of three $n=1000$ matrices
-($\approx$24 MB) exceeds the 24 MB shared L3, so concurrent workers compete
-for memory bandwidth, the mechanism predicted by the roofline
-model~\cite{williams2009}. The fact that $n=500$ scales slightly better than
-$n=1000$ at high $p$ (Table~\ref{tab:cross}) is consistent with a bandwidth
-wall: more threads cannot create bandwidth.
+The OpenMP implementation consistently achieves the best performance for
+$n \geq 500$, with a practical sweet spot at $p = 8$--$16$ threads. The
+maximum speedup obtained was approximately $5.45 \times$ using 22 threads,
+leading to an efficiency of:
+\[
+\eta = \frac{5.45}{22} \approx 25\%.
+\]
+This behavior aligns with Amdahl's Law~\cite{amdahl1967}: since a portion of
+the program is not
+effectively parallelizable, the speedup eventually saturates even when
+increasing threads. Here the ``serial part'' is not literal code --- the
+kernel has no serial section --- but synchronization, scheduling and
+memory-bandwidth contention behave like one; fitting the observed speedups
+yields an effective serial-plus-overhead fraction of roughly 9--15\%. Two
+machine-specific effects reinforce the saturation: the CPU is
+heterogeneous~\cite{intel155h} (only 6 P-cores, so a team of 16--22 threads
+necessarily includes slower E-core workers), and the working set of three
+$1000 \times 1000$ matrices ($\approx$24 MB) exceeds the shared L3, so
+concurrent workers compete for memory bandwidth~\cite{williams2009}. The mild
+superlinearity at $p = 2$ ($S = 2.07$) is most
+plausibly a turbo-frequency regime effect and is reported as observed.
 
-\textbf{Overhead and superlinearity.} OpenMP at $p=1$ is within 1.4\% of the
-sequential baseline (Table~\ref{tab:n1000}), so the framework fork/join cost
-is negligible for kernels of this size (H2 confirmed). The mild superlinearity
-at $p=2$ ($S = 2.07$, $E = 1.04$) is not evidence of ``free work'': the most
-plausible cause is the frequency regime --- a single busy P-core runs at a
-different point of the turbo curve than two lightly loaded cores --- combined
-with median quantization. We report it as observed and do not claim a
-mechanism we cannot isolate without per-core frequency counters.
+A useful cross-check emerges from the SIMD study: the best parallel
+configuration of the baseline i-j-k kernel ($p = 16$: 157.7 ms) and the
+single-threaded vectorized i-k-j kernel with \texttt{-march=native}
+(156.8 ms) are essentially tied. Each technique buys roughly the same
+$5.5 \times$ on this workload, but they act on different resources (cores
+vs.\ vector units), so they are complementary rather than substitutes.
 
-\textbf{Threads vs.\ vectorization.} H3 is confirmed with a striking
-cross-check: the best parallel configuration of the unvectorized i-j-k kernel
-($p=16$: 157.7 ms) and the single-threaded vectorized i-k-j kernel with
-\texttt{-march=native} (156.8 ms) are essentially tied. Each technique buys
-roughly the same $5.5 \times$ on this workload, but they act on different
-resources (cores vs.\ vector units) and are therefore complementary; combining
-them (OpenMP over i-k-j) was out of scope and is the natural next experiment.
-The loop reorder alone --- before any vector instruction executes ---
-accounts for $3 \times$, a reminder that ``vectorizable'' often means
-``cache-friendly'' at the same time.
+The main limitations of the study are: a single machine and compiler; one
+parallelization strategy (static row partitioning, no cache blocking);
+matrices up to $n = 1000$ only; inability to control thread affinity on
+Windows/libgomp; and measurement noise comparable to the runtime for the
+smallest sizes. The conclusions are therefore limited to the configurations
+actually measured.
 
-\textbf{Threats to validity and limitations.} (i) Single machine, single
-compiler, single parallelization strategy (static row partitioning, no cache
-blocking); (ii) $n \leq 1000$ is modest --- larger $n$ would shift the balance
-toward bandwidth even more; (iii) affinity could not be controlled on
-Windows/libgomp, so thread placement is OS-dependent; (iv) the memory metric
-(working set) is coarse and includes the runtime; (v) small sizes
-($n \leq 250$) have measurement noise comparable to their runtime and should
-not be used for scaling conclusions; (vi) frequency/turbo states were not
-controlled. Conclusions are limited to the configurations actually measured.
+\section{Synchronization Considerations}
+\label{sec:sync}
 
-\section{Conclusions}
+In this project, synchronization primitives such as locks, atomics or
+explicit barriers inside the kernel were not required, because each thread
+computes independent rows of the resulting matrix with a static schedule: the
+outer loop (rows of $\mathbf{C}$) is partitioned with
+\texttt{schedule(static)}, and every row of $\mathbf{C}$ is written by
+exactly one thread. Therefore, no shared write operations occur, and the
+parallel result is bit-identical to the sequential one (confirmed by the
+elementwise comparison, whose maximum difference is exactly zero).
+
+If a block-based (tiled) parallelization strategy were implemented, or if
+threads shared partial accumulators, synchronization mechanisms would become
+necessary to avoid race conditions. The same applies to dynamic scheduling
+with a shared loop counter, which typically requires an atomic increment or
+a reduction.
+
+\section{Resource Usage}
+\label{sec:resources}
+
+The parallel implementations increase memory access pressure, as multiple
+threads attempt to read rows from matrix $\mathbf{A}$ and columns from matrix
+$\mathbf{B}$; in the i-j-k order the innermost loop walks a column of
+$\mathbf{B}$ with stride $n$, which is unfavorable for the cache
+prefetcher~\cite{hager2011}. However, since each thread writes to a distinct
+row of
+$\mathbf{C}$, no write contention occurs.
+
+The measured process working set is essentially constant across thread counts
+($\approx$30.5 MB for $n = 1000$: the three matrices account for about
+24 MB, plus the C runtime and per-thread stacks, which grow slightly with
+$p$). The experiment is therefore not limited by memory capacity, but by
+memory \emph{bandwidth}: the results show that performance scales until
+bandwidth becomes the limiting factor, which on this machine happens around
+$p = 16$. The sequential i-k-j variant reduces memory pressure by the same
+amount that threading reduces compute time, because its innermost loop
+updates a contiguous row of $\mathbf{C}$ from a contiguous row of
+$\mathbf{B}$ --- better locality and vectorizability at once.
+
+\section{Conclusion}
 \label{sec:concl}
 
-Within the tested scope (C + OpenMP i-j-k kernel, one hybrid Intel laptop CPU,
-dense inputs up to $n = 1000$), the study establishes that: (1) thread
-parallelism delivers up to $5.45 \times$ speedup, saturating around
-$p = 16$--$22$ with efficiency falling to $0.25$; (2) the OpenMP overhead at
-$p=1$ is negligible ($\approx 1.4\%$); (3) oversubscribing the 22 hardware
-threads brings no benefit; and (4) a vectorizable i-k-j ordering with
-\texttt{-march=native} matches the 16-thread parallel speedup in a single
-thread ($5.47 \times$ over the i-j-k baseline). What remains unresolved is how
-these two axes combine (parallel i-k-j), how the curves shift on a homogeneous
-server CPU or under enforced affinity, and how the saturation point moves with
-$n$ far beyond the last-level cache.
+Parallelism allows a substantial reduction in execution time for large matrix
+operations: up to $5.45 \times$ on the tested machine, with the OpenMP
+implementation being the best performer among the tested configurations at
+$p = 8$--$16$ threads. Thread management overhead makes parallel execution
+useless for small matrices, and efficiency drops quickly beyond $p \approx 8$
+as bandwidth and core heterogeneity dominate. The optional SIMD study shows
+that a vectorizable loop order with \texttt{-march=native} reaches the same
+$5.5 \times$ in a single thread, confirming that vectorization and threading
+are complementary.
 
-\subsection*{Data and code availability}
-All materials are in the GitHub repository
-\url{https://github.com/CarlosMontesdeoca21/BasicMatrixMultiplication},
-folder \texttt{Activity3/}: source code (\texttt{code/c/benchmark\_omp.c},
-scripts in \texttt{code/python/}), raw measurements
-(\texttt{data/results\_*.csv}), consolidated tables and figures
-(\texttt{resultsAct3/}), and a README with the exact build and execution
-commands. The matrices are regenerated deterministically (seed 42) by
-\texttt{generate\_inputsAct3.py}.
+Future work could include:
+\begin{itemize}
+\item Combining OpenMP with the vectorized i-k-j kernel;
+\item Enforcing thread affinity and repeating the study on a homogeneous
+server CPU;
+\item Cache blocking (tiling) to improve locality for large $n$;
+\item GPU acceleration using CUDA / OpenCL libraries.
+\end{itemize}
 
-\subsection*{Generative AI disclosure}
-In accordance with the course policy, the author discloses the use of an AI
-programming assistant (OpenCode, a large-language-model-based CLI agent) for
-drafting and reviewing the C/OpenMP and Python code and for editing this
-report. The student compiled, executed and validated all code, obtained all
-measurements locally, generated all figures with the provided scripts, and
-verified every reference cited in this paper.
+\section*{Code Repository}
+
+The source code for this project is available at:
+\url{https://github.com/CarlosMontesdeoca21/BasicMatrixMultiplication}
+
+The \texttt{Activity3/} folder contains the C/OpenMP benchmark, the Python
+scripts to generate inputs and consolidate results, the raw measurements
+(CSV), the figures, and this report (\texttt{report/}).
 
 \begin{thebibliography}{10}
 
@@ -502,5 +415,14 @@ Library (libgomp), manual.'' [Online]. Available:
 \url{https://gcc.gnu.org/onlinedocs/libgomp/}
 
 \end{thebibliography}
+
+\section*{Generative AI Disclosure}
+
+In accordance with the course policy, the author discloses the use of an AI
+programming assistant (OpenCode, a large-language-model-based CLI agent) for
+drafting and reviewing the C/OpenMP and Python code and for editing this
+report. The student compiled, executed and validated all code, obtained all
+measurements locally, generated all figures with the provided scripts, and
+verified every reference cited in this paper.
 
 \end{document}

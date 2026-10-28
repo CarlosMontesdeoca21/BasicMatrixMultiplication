@@ -1,0 +1,22 @@
+﻿Vectorization evidence for benchmark_omp.c (gcc 16.2.0, MSYS2)
+Generated with:
+  gcc -O3 -fopenmp -DBUILD_LABEL=O3 -fopt-info-vec-optimized -c benchmark_omp.c
+
+Interpretation:
+- multiply_seq (i-j-k baseline) accumulates over k in the innermost loop
+  (FP reduction). gcc cannot reassociate FP reductions without -ffast-math,
+  so the inner loop is NOT reported as vectorized.
+- multiply_seq_ikj (SIMD study) exposes a rank-1 row update
+  (C[i][j] += aik * B[k][j]) whose innermost loop IS auto-vectorized,
+  as reported below (source line 53).
+
+=== -fopt-info-vec-optimized output ===
+benchmark_omp.c:53:31: optimized: loop vectorized using 16 byte vectors and unroll factor 2
+benchmark_omp.c:53:31: optimized: loop versioned for vectorization because of possible aliasing
+benchmark_omp.c:128:27: optimized: loop vectorized using 16 byte vectors and unroll factor 2
+benchmark_omp.c:200:9: optimized: basic block part vectorized using 16 byte vectors
+benchmark_omp.c:205:9: optimized: basic block part vectorized using 16 byte vectors
+benchmark_omp.c:205:9: optimized: basic block part vectorized using 8 byte vectors
+
+(Line 53 = innermost loop of multiply_seq_ikj. Lines 128/200/205 are CSV
+handling and utility loops, not part of the timed kernels.)

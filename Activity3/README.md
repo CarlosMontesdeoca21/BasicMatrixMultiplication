@@ -83,36 +83,56 @@ this activity only adds threading on top.
   `A @ B` (atol = 1e-6). All validations pass; sequential vs OpenMP elementwise
   difference is exactly 0 (same operation order per element).
 
-## How to reproduce (run from the repository root)
+## Prerequisites
 
-> **Working directory note:** the `gcc` commands below use paths relative to
-> the repository root. If your terminal is already inside `Activity3/`,
-> remove the leading `Activity3/` from those paths. The Python scripts and the
-> benchmark binary resolve `Activity3/data` by themselves (relative to the
-> script/exe location), so they can be run from any directory.
+| Requirement | Notes |
+|---|---|
+| Windows 10/11 + PowerShell | commands below assume PowerShell at the repository root |
+| gcc with OpenMP | tested with gcc 16.2.0 (MSYS2). Any gcc with `-fopenmp` works; on Windows it links `libgomp` and needs `-lpsapi` for the memory metric |
+| Python 3.10+ | if `python` opens the Microsoft Store, use `py` instead |
+| Python packages | `pip install numpy pandas matplotlib` |
+
+All commands are run **from the repository root** (the folder that contains
+`Activity1/`, `Activity2/` and `Activity3/`):
+
+```powershell
+cd "...\BasicMatrixMultiplication"
+```
+
+The Python scripts and the benchmark binary resolve `Activity3/data` by
+themselves (relative to the script/exe location), so they also work from any
+other directory. Only the `gcc` commands and the `--output` paths below are
+relative to the repository root. If your terminal is inside `Activity3/`,
+remove the leading `Activity3/` from those paths.
+
+## How to reproduce
 
 1. Generate the input matrices (deterministic, seed 42; the matrices for
    n = 10, 100, 250 are identical by construction to those of Activity 1):
 
-```bash
+```powershell
 python Activity3/code/python/generate_inputsAct3.py
 ```
 
 2. Build the main binary (`-O3`):
 
-```bash
+```powershell
 gcc -O3 -fopenmp -Wall -DBUILD_LABEL=O3 Activity3/code/c/benchmark_omp.c -o Activity3/code/c/benchmark_omp.exe -lpsapi -lm
 ```
 
-3. Run the main sweep (sequential + OpenMP thread sweep + i-k-j at -O3):
+3. Run the main sweep (sequential + OpenMP thread sweep + i-k-j at -O3).
+   Takes roughly 2–4 minutes on the reference machine. Results are written to
+   `Activity3/data/results_omp_act3.csv`:
 
-```bash
-.\Activity3\code\c\benchmark_omp.exe --method all --output Activity3\data\results_omp_act3.csv
+```powershell
+.\Activity3\code\c\benchmark_omp.exe --method all
 ```
 
-4. Correctness checks:
+4. Correctness checks (the first command dumps the sequential result of
+   n = 10 to `Activity3/data/result_C_10.csv`, the second one compares it
+   against NumPy):
 
-```bash
+```powershell
 .\Activity3\code\c\benchmark_omp.exe --validate 10
 python Activity3/code/python/validate_act3.py
 ```
@@ -120,21 +140,28 @@ python Activity3/code/python/validate_act3.py
 5. SIMD study — build and run the two additional variants (single-threaded,
    sizes 250, 500, 1000):
 
-```bash
+```powershell
 gcc -O3 -march=native -fopenmp -Wall -DBUILD_LABEL=O3_native Activity3/code/c/benchmark_omp.c -o Activity3/code/c/benchmark_omp_native.exe -lpsapi -lm
 gcc -O3 -fno-tree-vectorize -fopenmp -Wall -DBUILD_LABEL=O3_no_vec Activity3/code/c/benchmark_omp.c -o Activity3/code/c/benchmark_omp_no_vec.exe -lpsapi -lm
 .\Activity3\code\c\benchmark_omp_native.exe --method ikj --sizes 250,500,1000 --output Activity3\data\results_simd_native.csv
 .\Activity3\code\c\benchmark_omp_no_vec.exe --method ikj --sizes 250,500,1000 --output Activity3\data\results_simd_no_vec.csv
 ```
 
-Vectorization evidence for the report is stored in
-`resultsAct3/vectorization_evidence.txt` (gcc `-fopt-info-vec-optimized`):
-the i-k-j inner loop is vectorized with 16-byte vectors, while the i-j-k
-inner loop (FP reduction over k) is not vectorizable without `-ffast-math`.
+6. (Optional) Regenerate the vectorization evidence with gcc's
+   `-fopt-info-vec-optimized` (a curated copy is already included in the
+   repository):
 
-6. Consolidate and plot:
+```powershell
+cmd /c "gcc -O3 -fopenmp -DBUILD_LABEL=O3 -fopt-info-vec-optimized -c Activity3/code/c/benchmark_omp.c -o Activity3/code/c/benchmark_omp.o 2> Activity3/resultsAct3/vectorization_evidence.txt"
+```
 
-```bash
+   The i-k-j inner loop is vectorized with 16-byte vectors, while the i-j-k
+   inner loop (FP reduction over k) is not vectorizable without `-ffast-math`.
+
+7. Consolidate and plot (writes the summary CSVs and the five figures of
+   `resultsAct3/`):
+
+```powershell
 python Activity3/code/python/merge_results_act3.py
 python Activity3/code/python/plot_results_act3.py
 ```

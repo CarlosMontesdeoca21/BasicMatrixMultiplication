@@ -53,6 +53,21 @@ question: how does the thread count affect the execution time of an OpenMP
 implementation compared with its sequential baseline, and where does the
 speedup saturate?
 
+The hypotheses registered before the measurements were:
+\begin{itemize}
+\item \textbf{H1:} Speedup will be sub-linear and will saturate well below
+the number of hardware execution contexts, because memory-bandwidth
+contention and heterogeneous core speeds limit the gain of additional
+threads.
+\item \textbf{H2:} Running OpenMP with a single thread will incur a small
+but measurable overhead with respect to the sequential baseline (on the
+order of a few percent).
+\item \textbf{H3:} Vectorizing the kernel (i-k-j loop order with
+\texttt{-march=native}) will provide a single-thread speedup comparable to
+the gain of adding threads up to saturation, so both techniques will be
+complementary rather than substitutes.
+\end{itemize}
+
 We implement and compare three approaches:
 \begin{itemize}
 \item Sequential algorithm (classic i-j-k triple loop in C, double
@@ -82,8 +97,9 @@ metric based on the process API (\texttt{psapi}). The OpenMP kernel
 uses \texttt{num\_threads($p$)} and \texttt{schedule(static)}; each row of
 the result matrix is written by exactly one thread.
 \item \textbf{Python automation scripts:} \texttt{generate\_inputsAct3.py}
-creates the deterministic input matrices (seed 42, sizes
-$n \in \{10, 100, 250, 500, 1000\}$), \texttt{validate\_act3.py} checks the
+creates the deterministic input matrices (uniform values in $[0,1)$, seed
+42, sizes $n \in \{10, 100, 250, 500, 1000\}$), \texttt{validate\_act3.py}
+checks the
 sequential result against NumPy, \texttt{merge\_results\_act3.py} computes
 medians, IQR, speedup and efficiency, and \texttt{plot\_results\_act3.py}
 exports the performance charts.
@@ -98,6 +114,11 @@ tables, figures and the compiler vectorization report live in
 Production kernel logic is separated from benchmarking and analysis
 scripts, and all matrix sizes and thread counts are fully parameterized via
 command-line flags.
+
+The baseline kernel, storage layout, CSV loader and checksum validation are
+the ones validated in Activity~1; they are copied (not imported) into this
+activity so that the delivery is self-contained, and the input generator
+follows the same verified generator used in Activity~1.
 
 \section{Experimental methodology}
 \label{sec:method}
@@ -132,7 +153,11 @@ validations passed.
 \item \textbf{Thread configuration:} The thread counts tested were
 $p \in \{1, 2, 4, 8, 16, 22, 28\}$: $p = 22$ matches the number of hardware
 contexts and $p = 28$ deliberately oversubscribes the machine (labelled as
-such in the results). Explicit thread affinity
+such in the results). The benchmark creates exactly $p$ threads via
+\texttt{num\_threads($p$)}, and no other threaded library participates in
+the timed region; \texttt{numpy} (used only for off-line validation at
+$n = 10$) may create its own BLAS threads, but it never runs inside the
+timed region. Explicit thread affinity
 (\texttt{OMP\_PROC\_BIND}/\texttt{OMP\_PLACES}) could not be enforced,
 because the OpenMP runtime ignored it in this environment; the OS scheduler
 placed the workers.
@@ -146,9 +171,9 @@ time was 1.19 s).
 
 The data extracted from the consolidated benchmarking CSVs are summarized
 below. For each configuration (matrix size $n$ and thread count $p$), the
-median execution time, the interquartile range (IQR) variability, the
-speedup and the efficiency are reported to ensure robust statistical
-evaluation.
+median execution time, the interquartile range (IQR) variability, the median
+memory footprint, the speedup and the efficiency are reported to ensure
+robust statistical evaluation.
 
 \subsection{Numerical summary}
 \label{sec:numsummary}
@@ -160,21 +185,21 @@ Table~\ref{tab:cross} consolidates the speedup across problem sizes.
 
 \begin{table}[h]
 \centering
-\caption{Thread sweep for $n = 1000$: median time (IQR $< 2\%$ of the
-median), speedup and efficiency.}
+\caption{Thread sweep for $n = 1000$: median time with IQR, median memory,
+speedup and efficiency.}
 \label{tab:sweep}
-\begin{tabular}{@{}lcccc@{}}
+\begin{tabular}{@{}lccccc@{}}
 \toprule
-Config & $T_p$ (ms) & IQR (ms) & $S(p)$ & $E(p)$ \\
+Config & $T_p$ (ms) & IQR (ms) & Mem (KB) & $S(p)$ & $E(p)$ \\
 \midrule
-Sequential & 858.2 & 31.9 & --- & --- \\
-OpenMP $p=1$ & 846.6 & 7.7 & 1.01 & 1.01 \\
-OpenMP $p=2$ & 414.4 & 8.7 & 2.07 & 1.04 \\
-OpenMP $p=4$ & 239.2 & 16.9 & 3.59 & 0.90 \\
-OpenMP $p=8$ & 177.5 & 5.4 & 4.83 & 0.60 \\
-OpenMP $p=16$ & 157.7 & 3.3 & 5.44 & 0.34 \\
-OpenMP $p=22$ & 157.4 & 5.3 & 5.45 & 0.25 \\
-OpenMP $p=28$ & 158.5 & 1.9 & 5.41 & 0.19 \\
+Sequential & 858.2 & 31.9 & 31304 & --- & --- \\
+OpenMP $p=1$ & 846.6 & 7.7 & 31304 & 1.01 & 1.01 \\
+OpenMP $p=2$ & 414.4 & 8.7 & 30888 & 2.07 & 1.04 \\
+OpenMP $p=4$ & 239.2 & 16.9 & 30920 & 3.59 & 0.90 \\
+OpenMP $p=8$ & 177.5 & 5.4 & 30980 & 4.83 & 0.60 \\
+OpenMP $p=16$ & 157.7 & 3.3 & 31108 & 5.44 & 0.34 \\
+OpenMP $p=22$ & 157.4 & 5.3 & 31208 & 5.45 & 0.25 \\
+OpenMP $p=28$ & 158.5 & 1.9 & 31316 & 5.41 & 0.19 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -223,7 +248,7 @@ efficiency plots were automatically generated from the benchmark data.
 \begin{figure}[h]
 \centering
 \includegraphics[width=0.9\textwidth]{plot_time_vs_threads_act3.png}
-\caption{Execution time (ms, log scale) vs.\ thread count for
+\caption{Execution time (s, log scale) vs.\ thread count for
 $n \in \{250, 500, 1000\}$, with IQR error bars. The dotted line marks the
 22 hardware contexts.}
 \label{fig:time-threads}
@@ -232,7 +257,7 @@ $n \in \{250, 500, 1000\}$, with IQR error bars. The dotted line marks the
 \begin{figure}[h]
 \centering
 \includegraphics[width=0.9\textwidth]{plot_seq_vs_omp_act3.png}
-\caption{Execution time (ms, log scale) vs.\ matrix size: sequential
+\caption{Execution time (s, log scale) vs.\ matrix size: sequential
 baseline, OpenMP with $p=1$ (framework overhead) and OpenMP with $p=16$.}
 \label{fig:time-size}
 \end{figure}
@@ -245,7 +270,7 @@ problems ($n \leq 100$, not plotted) are dominated by thread management:
 their time actually increases with $p$, because the computation is shorter
 than the cost of creating and joining the thread team.
 Figure~\ref{fig:time-size} shows the same data per matrix size: the OpenMP
-version at $p = 16$ is about $4.8$--$5.7\times$ faster than the sequential
+version at $p = 16$ is about $4.0$--$5.7\times$ faster than the sequential
 baseline for $n \in \{250, 500, 1000\}$, while at $p = 1$ it matches it.
 
 \subsubsection{Speedup Analysis}
@@ -306,7 +331,7 @@ i-k-j, \texttt{-O3 -march=native} & 1.80 & 14.58 & 156.85 \\
 \begin{figure}[h]
 \centering
 \includegraphics[width=0.9\textwidth]{plot_simd_act3.png}
-\caption{SIMD study: median time (log scale) of the i-k-j kernel under
+\caption{SIMD study: median time (s, log scale) of the i-k-j kernel under
 three compiler configurations, compared with the i-j-k \texttt{-O3}
 baseline.}
 \label{fig:simd}
@@ -395,8 +420,8 @@ warm-up phases to minimize cold-start anomalies and transient system noise.
 Furthermore, utilizing the median alongside the interquartile range (IQR)
 guarantees robustness against isolated outliers caused by background
 operating system tasks. The variability is small for the parallel
-configurations (IQR below 2\% of the median for $n = 1000$), but the
-smallest sizes ($n \leq 250$) have measurement noise comparable to their
+configurations (the IQR stays below 7.1\% of the median for $n = 1000$), but
+the smallest sizes ($n \leq 250$) have measurement noise comparable to their
 runtime and should not be used for scaling conclusions. Thread affinity
 could not be controlled with the OpenMP runtime used, so thread placement is
 OS-dependent, and CPU frequency/turbo states were not controlled. Exact

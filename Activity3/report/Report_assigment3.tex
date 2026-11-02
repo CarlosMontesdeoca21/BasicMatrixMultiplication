@@ -10,8 +10,8 @@
 
 \begin{document}
 
-\title{\textcolor{black}{\LARGE Parallel Matrix Multiplication using OpenMP
-and SIMD Vectorization\\[0.5em]
+\title{\textcolor{black}{\LARGE\bfseries Parallel Matrix Multiplication
+using OpenMP and SIMD Vectorization\\[0.5em]
 \normalsize\normalfont Individual Assignment 3 --- Report}}
 \author{\textcolor{black}{Carlos Montesdeoca Vega\\[8pt]
 \texttt{repository:}\\[2pt]
@@ -26,8 +26,8 @@ a dense matrix multiplication implementation in shared memory, and under what
 conditions parallel execution becomes beneficial. We compare a sequential
 baseline (classic i-j-k triple loop in C, double precision) against an OpenMP
 parallelization of the same kernel over matrix rows, using thread counts
-$p \in \{1, 2, 4, 8, 16, 22, 28\}$ on a hybrid 16-core/22-thread Intel Core
-Ultra 7 155H. Inputs are deterministic shared matrices up to $n = 1000$;
+$p \in \{1, 2, 4, 8, 16, 22, 28\}$. Inputs are deterministic shared matrices
+up to $n = 1000$;
 each configuration is measured 5 times after 2 warm-ups with a
 monotonic microsecond-resolution timer, reporting medians and interquartile
 ranges. Speedup saturates at $S(p) \approx 5.45$ for $p \geq 16$, with
@@ -78,7 +78,7 @@ under the \texttt{Activity3/code} folder alongside management scripts:
 kernels (\texttt{Sequential} i-j-k, \texttt{OpenMP} with
 \texttt{\#pragma omp parallel for} over rows, and \texttt{Sequential\_ikj}
 for the SIMD study), plus a CSV loader, checksum validation and a memory
-metric based on the Windows process API (\texttt{psapi}). The OpenMP kernel
+metric based on the process API (\texttt{psapi}). The OpenMP kernel
 uses \texttt{num\_threads($p$)} and \texttt{schedule(static)}; each row of
 the result matrix is written by exactly one thread.
 \item \textbf{Python automation scripts:} \texttt{generate\_inputsAct3.py}
@@ -108,8 +108,8 @@ command-line flags.
 converted to milliseconds. Only the multiplication kernel is timed; matrix
 loading and allocation are outside the timed region. Memory consumption was
 tracked with \texttt{GetProcessMemoryInfo} (process working set, KB). The
-OpenMP API \texttt{omp\_get\_wtime()} was rejected because in libgomp on
-Windows it only resolves about 1 ms, which quantizes the smaller sizes.
+OpenMP API \texttt{omp\_get\_wtime()} was rejected because in the OpenMP
+runtime used it only resolves about 1 ms, which quantizes the smaller sizes.
 \item \textbf{Warm-up phase \& repetitions:} A fixed warm-up phase
 (2 rounds) was executed prior to recording official metrics, and its samples
 were excluded from the reported statistics. Following the warm-up, 5
@@ -129,18 +129,13 @@ $10^{-6}$). Additionally, the sequential result for $n = 10$ matches NumPy's
 sequential and parallel results is exactly zero, because both kernels
 perform the same operation in the same order for every element. All
 validations passed.
-\item \textbf{Environment:} All experiments were executed on a machine
-with: CPU Intel Core Ultra 7 155H (Meteor Lake) --- 6 P-cores + 8 E-cores +
-2 low-power E-cores = 16 physical cores / 22 hardware threads, P-cores up to
-4.8 GHz; RAM 32 GB; OS Windows 11; compiler gcc 16.2.0 (MSYS2) with flags
-\texttt{-O3 -fopenmp}. Python 3.12 was used for input generation and
-analysis (numpy, pandas, matplotlib).
 \item \textbf{Thread configuration:} The thread counts tested were
 $p \in \{1, 2, 4, 8, 16, 22, 28\}$: $p = 22$ matches the number of hardware
 contexts and $p = 28$ deliberately oversubscribes the machine (labelled as
 such in the results). Explicit thread affinity
 (\texttt{OMP\_PROC\_BIND}/\texttt{OMP\_PLACES}) could not be enforced,
-because libgomp ignores it on Windows; the OS scheduler placed the workers.
+because the OpenMP runtime ignored it in this environment; the OS scheduler
+placed the workers.
 \item \textbf{Budgets:} The declared time and memory budgets were 5 minutes
 and 4 GB per multiplication; they were never reached (the largest observed
 time was 1.19 s).
@@ -352,8 +347,9 @@ but synchronization, scheduling and memory-bandwidth contention behave like
 one; fitting the observed speedups yields an effective serial-plus-overhead
 fraction of roughly 9--15\%.
 \item \textbf{Saturation causes:} Two machine-specific effects reinforce the
-saturation. The CPU is heterogeneous (only 6 P-cores, so a team of 16--22
-threads necessarily includes slower E-core workers), and the working set of
+saturation. The machine is heterogeneous (not all of its cores run at the
+same speed), so a team of 16--22 threads necessarily includes slower
+workers, and the working set of
 three $1000 \times 1000$ matrices ($\approx$24 MB) exceeds the shared L3, so
 concurrent workers compete for memory bandwidth. The fact that $n = 500$
 scales slightly better than $n = 1000$ at high $p$ is consistent with a
@@ -402,7 +398,7 @@ operating system tasks. The variability is small for the parallel
 configurations (IQR below 2\% of the median for $n = 1000$), but the
 smallest sizes ($n \leq 250$) have measurement noise comparable to their
 runtime and should not be used for scaling conclusions. Thread affinity
-could not be controlled on Windows/libgomp, so thread placement is
+could not be controlled with the OpenMP runtime used, so thread placement is
 OS-dependent, and CPU frequency/turbo states were not controlled. Exact
 execution times remain strictly bounded by underlying hardware
 specifications, CPU clock throttling, and background load. The conclusions
@@ -417,9 +413,9 @@ cache blocking).
 \item \textbf{Used in the project:}
 \begin{itemize}
 \item \textit{Timing \& Metrics:} \texttt{QueryPerformanceCounter} for
-high-resolution wall-clock timing, and the Windows process API
+high-resolution wall-clock timing, and the process API
 \texttt{GetProcessMemoryInfo} (\texttt{psapi}) for memory tracking in C.
-\item \textit{Compilation \& Vectorization evidence:} gcc 16.2.0 with
+\item \textit{Compilation \& Vectorization evidence:} gcc with
 \texttt{-O3 -fopenmp}, and \texttt{-fopt-info-vec-optimized} to report which
 loops were auto-vectorized.
 \item \textit{Data Processing \& Visualization:} Python scripts utilizing
@@ -455,7 +451,7 @@ already the natural kernel for tiling.
 vectorized i-k-j kernel: the two techniques act on different resources
 (cores vs.\ vector units) and should multiply their gains.
 \item \textbf{Thread management:} Enforce explicit thread affinity (on
-platforms where libgomp supports it), study dynamic versus static
+platforms where the OpenMP runtime supports it), study dynamic versus static
 scheduling, and repeat the analysis on a homogeneous server CPU to separate
 the heterogeneous-core effect from the bandwidth effect.
 \item \textbf{Scaling further:} Evaluate larger matrix sizes beyond the

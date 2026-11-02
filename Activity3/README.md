@@ -49,7 +49,7 @@ Activity3/
 │       ├── merge_results_act3.py    # median/IQR, speedup, efficiency, SIMD table
 │       └── plot_results_act3.py     # figures
 ├── report/                          # LaTeX report (Overleaf)
-│   └── Assignment03_Montesdeoca_Report.tex
+│   └── Report_assigment3.tex
 ├── data/                            # generated inputs + raw measurements (not tracked)
 └── resultsAct3/                     # consolidated CSVs, figures, evidence (tracked)
 ```
@@ -190,11 +190,11 @@ Consolidated results (tracked, `resultsAct3/`):
 
 ## Report (LaTeX / Overleaf)
 
-The research report lives in `report/Assignment03_Montesdeoca_Report.tex`
+The research report lives in `report/Report_assigment3.tex`
 (`article` class, single-column, numbered sections, pdfLaTeX). To compile it
 on Overleaf:
 
-1. Create a new Overleaf project and upload `Assignment03_Montesdeoca_Report.tex`.
+1. Create a new Overleaf project and upload `Report_assigment3.tex`.
 2. Create a folder named `figures/` inside the project and upload the five
    PNGs from `resultsAct3/`:
    `plot_time_vs_threads_act3.png`, `plot_speedup_vs_threads_act3.png`,
@@ -204,7 +204,7 @@ on Overleaf:
    figures either in `figures/` (Overleaf) or in `../resultsAct3/` (local
    compilation from `report/`).
 
-The submission PDF should be named `Assignment03_Montesdeoca_Report.pdf`.
+The submission PDF should be named `Report_assigment3.pdf`.
 
 ## Reused materials from previous activities
 

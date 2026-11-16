@@ -232,24 +232,6 @@ Consolidated results (tracked, `resultsAct4/`):
   because the physical cost of the shared-memory transport cannot be
   isolated on this machine.
 
-## Report (LaTeX / Overleaf)
-
-The research report lives in `report/Report_assigment4.tex`
-(`article` class, single-column, numbered sections, pdfLaTeX). To compile it
-on Overleaf:
-
-1. Create a new Overleaf project and upload `Report_assigment4.tex`.
-2. Create a folder named `figures/` inside the project and upload the five
-   PNGs from `resultsAct4/`:
-   `plot_time_vs_workers_act4.png`, `plot_speedup_vs_workers_act4.png`,
-   `plot_efficiency_act4.png`, `plot_phase_breakdown_act4.png`,
-   `plot_method_comparison_act4.png`.
-3. Set the compiler to **pdfLaTeX** and compile. The document expects the
-   figures either in `figures/` (Overleaf) or in `../resultsAct4/` (local
-   compilation from `report/`).
-
-The submission PDF should be named `Report_assigment4.pdf`.
-
 ## Reused materials from previous activities
 
 - The baseline kernel, storage layout, CSV loading, checksum validation and

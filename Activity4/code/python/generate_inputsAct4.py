@@ -2,7 +2,7 @@ import random
 import csv
 import os
 
-SIZES = [10, 100, 1000, 2000]
+SIZES = [10, 100, 500, 1000, 1500]
 
 
 def create_and_save_matrices(n, output_dir):

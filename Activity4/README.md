@@ -60,7 +60,7 @@ again leave thread placement to the OS scheduler.
 
 ```
 Activity4/
-├── .gitignore                       # data/ (generated), *.exe, *.o
+├── .gitignore                       # data/* (generated), raw CSV excepted, *.exe, *.o
 ├── README.md
 ├── code/
 │   ├── c/benchmark_mpi.c            # Sequential, OpenMP and MPI kernels + phase timing
@@ -72,7 +72,7 @@ Activity4/
 │       └── plot_results_act4.py     # figures
 ├── report/                          # LaTeX report (Overleaf)
 │   └── Report_assigment4.tex
-├── data/                            # generated inputs + raw measurements (not tracked)
+├── data/                            # raw results_act4.csv (tracked); input matrices (not tracked)
 └── resultsAct4/                     # consolidated CSVs, figures (tracked)
 ```
 
@@ -161,7 +161,8 @@ C:\msys64\ucrt64\bin\mpicc.exe -O3 -fopenmp -Wall -DBUILD_LABEL=O3 Activity4/cod
 3. Run the full campaign (self-test, validation, then the sweep of
    sequential + OpenMP + MPI over all sizes and worker counts). Takes roughly
    7 minutes on the reference machine with the High Performance power plan.
-   The script deletes any previous `results_act4.csv` first:
+   The script deletes any previous `results_act4.csv` first (the raw CSV is
+   tracked, so a rerun shows up in `git status`):
 
 ```powershell
 python Activity4/code/python/run_sweep_act4.py
@@ -190,7 +191,8 @@ python Activity4/code/python/plot_results_act4.py
 
 ## Outputs
 
-Raw measurements (generated locally in `data/`, not tracked):
+Raw measurements (tracked, `data/results_act4.csv`; the input matrices are
+generated locally and not tracked):
 
 - `results_act4.csv` — columns:
   `size,method,workers,threads,build,repetition,time_e2e,time_transfer,time_compute,time_gather,memory_kb,max_diff`

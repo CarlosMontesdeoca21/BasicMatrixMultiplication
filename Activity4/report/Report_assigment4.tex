@@ -52,9 +52,13 @@ authorized by the professor.
 Matrix multiplication is a fundamental operation in scientific computing and
 data analytics. Its classical algorithm has cubic time complexity
 ($O(n^3)$) and poor cache behavior, making it computationally expensive.
-Distributing the work across processes is the standard way to scale it
-beyond a single memory domain. The goal of this work is to evaluate the
-performance of a distributed implementation built with MPI, and to answer
+Distributing the work across processes with a message-passing framework
+such as MPI~\cite{mpi} is the standard way to scale it beyond a single
+memory domain, complementing shared-memory approaches such as
+OpenMP~\cite{openmp}; the fundamental limit of any such speedup is
+described by Amdahl's law~\cite{amdahl}. The goal of this work is to
+evaluate the performance of a distributed implementation built with MPI,
+and to answer
 focused research questions: how does the worker count affect the end-to-end
 execution time compared with the sequential baseline, where does the strong
 scaling saturate, how is the time split between transfer, computation and
@@ -123,11 +127,15 @@ validation, then every size/method/worker combination),
 \texttt{merge\_results\_act4.py} computes medians, IQR, strong scaling,
 phase medians and efficiency, and \texttt{plot\_results\_act4.py} exports the
 performance charts.
-\item \textbf{Data artifacts:} Raw measurements are stored as CSV files in
-\texttt{Activity4/data/} (generated locally, not tracked); consolidated
-tables and figures live in \texttt{Activity4/resultsAct4/} (tracked).
+\item \textbf{Data artifacts:} The raw measurement CSV
+(\texttt{Activity4/data/results\_act4.csv}, 260 rows) is tracked in the
+repository, while the generated input matrices under
+\texttt{Activity4/data/} are not; consolidated tables and figures live in
+\texttt{Activity4/resultsAct4/} (tracked).
 \item \textbf{Report:} The source of this document is
-\texttt{Activity4/report/Report\_assigment4.tex} (LaTeX).
+\texttt{Activity4/report/Report\_assigment4.tex} (LaTeX); the complete
+reproducibility materials (code, README, raw measurements, scripts and
+figures) are described in~\cite{materials}.
 \end{itemize}
 
 Production kernel logic is separated from benchmarking and analysis
@@ -155,7 +163,7 @@ B; (2) \emph{compute phase} --- the local i-j-k multiplication; (3)
 before each repetition keeps the phases comparable; the reported end-to-end
 time is the sum of the three phases, never an overlap of them.
 \item \textbf{Workers, processes and threads:} In this assignment a
-\emph{worker} is an MPI \emph{process} launched by \texttt{mpiexec}: each
+\emph{worker} is an MPI \emph{process} launched by \texttt{mpiexec}~\cite{msmpi}: each
 worker has its own address space, its own copy of B and its own row block of
 A and C. An OpenMP \emph{thread} is a different entity: threads share one
 address space and read the same matrices. All workers and threads of every
@@ -164,7 +172,7 @@ local multi-worker configuration was explicitly authorized by the professor.
 No remote host is involved, so ``distributed'' here means distributed
 memory/processes, not distributed machines.
 \item \textbf{Measurement:} Execution time was measured with
-\texttt{QueryPerformanceCounter} (monotonic, $\approx$100 ns resolution)
+\texttt{QueryPerformanceCounter}~\cite{qpc} (monotonic, $\approx$100 ns resolution)
 around each phase. Only the three phases of the multiplication are timed;
 matrix loading, allocation and the single-process reference computation are
 outside the timed region. Memory consumption was tracked with
@@ -489,7 +497,7 @@ $\eta = 5.77 / 8 \approx 72\%$ at the sweet spot and $\eta \approx 20\%$ at
 $p = 22$. Fitting the observed speedups at $p = 8$ yields an effective
 serial-plus-overhead fraction of 6--9\%, similar to the OpenMP reference
 fitted the same way (6--8\%); fitted at $p = 22$ it grows to 18--19\%,
-because Amdahl's law absorbs the growing communication term as ``serial''.
+because Amdahl's law~\cite{amdahl} absorbs the growing communication term as ``serial''.
 Compared with Activity~3, where OpenMP saturated at 5--9\%, the MPI
 saturation is therefore dominated by collectives and per-process overhead
 rather than by thread scheduling.
@@ -673,5 +681,37 @@ implementations, and final validations were independently performed and
 verified by the author, who also generated all figures locally and checked
 every reported number against the raw CSV measurements.
 \end{itemize}
+
+\section{References}
+\label{sec:refs}
+
+\begin{thebibliography}{6}
+
+\bibitem{mpi} MPI Forum, ``MPI: A Message-Passing Interface Standard,
+Version 5.0,'' 2025. [Online]. Available: https://www.mpi-forum.org/
+
+\bibitem{msmpi} Microsoft, ``Microsoft MPI (MS-MPI) v10.1.3,'' Microsoft
+Download Center, 2024. [Online]. Available:
+https://www.microsoft.com/en-us/download/details.aspx?id=105289
+
+\bibitem{openmp} OpenMP Architecture Review Board, ``OpenMP Application
+Program Interface, Version 5.2,'' Oct. 2022. [Online]. Available:
+https://www.openmp.org/
+
+\bibitem{amdahl} G. M. Amdahl, ``Validity of the single processor approach
+to achieving large scale computing capabilities,'' in \emph{Proc. AFIPS
+Spring Joint Computer Conf.}, vol. 30, Washington, DC, USA, 1967,
+pp. 483--485.
+
+\bibitem{qpc} Microsoft, ``QueryPerformanceCounter function (Win32
+apps),'' Microsoft Learn. [Online]. Available:
+https://learn.microsoft.com/en-us/windows/win32/api/profileapi/nf-profileapi-queryperformancecounter
+
+\bibitem{materials} C. Montesdeoca Vega, ``BasicMatrixMultiplication ---
+Activity~4 materials: source code, README, raw measurements and analysis
+scripts,'' GitHub repository. [Online]. Available:
+https://github.com/CarlosMontesdeoca21/BasicMatrixMultiplication
+
+\end{thebibliography}
 
 \end{document}
